@@ -8,6 +8,38 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
+# Check for help flag
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help)
+      cat << 'EOF'
+Nautobot Initialization Script
+
+USAGE:
+    ./init-nautobot.sh
+
+DESCRIPTION:
+    Performs first-time setup for Nautobot including:
+    - Starting databases
+    - Setting up media/static directories
+    - Running database migrations
+    - Collecting static files
+    - Creating superuser interactively
+
+EXAMPLES:
+    ./init-nautobot.sh        # Run initialization
+    ./init-nautobot.sh --help # Show this help
+
+NOTES:
+    - Run this once before using start.sh
+    - Creates superuser interactively
+    - Sets up proper file permissions
+EOF
+      exit 0
+      ;;
+  esac
+done
+
 COMPOSE_CMD="docker compose"
 if ! $COMPOSE_CMD version >/dev/null 2>&1; then
   if command -v docker-compose >/dev/null 2>&1; then

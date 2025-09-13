@@ -10,6 +10,39 @@ if ! command -v docker &>/dev/null || ! docker compose version &>/dev/null; then
   exit 1
 fi
 
+# Check for help flag
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help)
+      cat << 'EOF'
+Interactive User Creation Script
+
+USAGE:
+    ./create-users.sh
+
+DESCRIPTION:
+    Interactively creates superusers in NetBox and/or Nautobot.
+    Checks if user already exists before creating to avoid duplicates.
+
+SERVICES:
+    netbox     Create user in NetBox only
+    nautobot   Create user in Nautobot only  
+    both       Create user in both services
+
+EXAMPLES:
+    ./create-users.sh        # Interactive mode
+    echo "both" | ./create-users.sh  # Non-interactive
+
+NOTES:
+    - Passwords are entered without echo (hidden)
+    - All fields (username, email, password) are required
+    - Script will skip creation if user already exists
+EOF
+      exit 0
+      ;;
+  esac
+done
+
 read -rp "Which service? (netbox/nautobot/both): " SERVICE
 SERVICE="${SERVICE,,}"  # lowercase
 

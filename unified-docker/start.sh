@@ -18,6 +18,32 @@ CLEAN=0
 for arg in "$@"; do
   case "$arg" in
     --clean) CLEAN=1 ;;
+    -h|--help)
+      cat << 'EOF'
+Unified NetBox and Nautobot Startup Script
+
+USAGE:
+    ./start.sh [OPTIONS]
+
+OPTIONS:
+    --clean    Remove conflicting containers before starting
+    -h, --help Show this help message
+
+DESCRIPTION:
+    Starts both NetBox and Nautobot with proper database wait logic
+    and automatic initialization. Includes database migrations,
+    static file collection, and superuser creation.
+
+EXAMPLES:
+    ./start.sh              # Regular start
+    ./start.sh --clean      # Clean start (removes conflicts)
+
+ACCESS:
+    NetBox:   http://192.168.5.9:8080
+    Nautobot: http://192.168.5.9:8081
+EOF
+      exit 0
+      ;;
     *) echo "Unknown arg: $arg"; exit 1 ;;
   esac
 done
