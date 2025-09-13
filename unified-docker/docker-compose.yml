@@ -1,0 +1,203 @@
+version: "3.9"
+
+services:
+  netbox:
+    image: docker.io/netboxcommunity/netbox:${VERSION-v4.4-3.4.0}
+    container_name: netbox
+    depends_on:
+      - netbox-postgres
+      - netbox-redis
+      - netbox-redis-cache
+    env_file: ../netbox-docker/env/netbox.env
+    user: "unit:root"
+    volumes:
+      - ../netbox-docker/configuration:/etc/netbox/config:z,ro
+      - netbox-media-files:/opt/netbox/netbox/media:rw
+      - netbox-reports-files:/opt/netbox/netbox/reports:rw
+      - netbox-scripts-files:/opt/netbox/netbox/scripts:rw
+    ports:
+      - "8080:8080"
+    networks:
+      - netbox-net
+    healthcheck:
+      test: curl -f http://localhost:8080/login/ || exit 1
+      start_period: 90s
+      timeout: 3s
+      interval: 15s
+
+  netbox-worker:
+    image: docker.io/netboxcommunity/netbox:${VERSION-v4.4-3.4.0}
+    container_name: netbox-worker
+    depends_on:
+      netbox:
+        condition: service_healthy
+    env_file: ../netbox-docker/env/netbox.env
+    command:
+      - /opt/netbox/venv/bin/python
+      - /opt/netbox/netbox/manage.py
+      - rqworker
+    volumes:
+      - ../netbox-docker/configuration:/etc/netbox/config:z,ro
+      - netbox-media-files:/opt/netbox/netbox/media:rw
+      - netbox-reports-files:/opt/netbox/netbox/reports:rw
+      - netbox-scripts-files:/opt/netbox/netbox/scripts:rw
+    networks:
+      - netbox-net
+    healthcheck:
+      test: ps -aux | grep -v grep | grep -q rqworker || exit 1
+      start_period: 20s
+      timeout: 3s
+      interval: 15s
+
+  netbox-postgres:
+    image: docker.io/postgres:17-alpine
+    container_name: netbox-postgres
+    env_file: ../netbox-docker/env/postgres.env
+    volumes:
+      - netbox-postgres-data:/var/lib/postgresql/data
+    networks:
+      netbox-net:
+        aliases: [postgres]
+    healthcheck:
+      test: pg_isready -q -t 2 -d $$POSTGRES_DB -U $$POSTGRES_USER
+      start_period: 20s
+      timeout: 30s
+      interval: 10s
+      retries: 5
+
+  netbox-redis:
+    image: docker.io/valkey/valkey:8.1-alpine
+    container_name: netbox-redis
+    command:
+      - sh
+      - -c
+      - valkey-server --appendonly yes --requirepass $$REDIS_PASSWORD
+    env_file: ../netbox-docker/env/redis.env
+    volumes:
+      - netbox-redis-data:/data
+    networks:
+      netbox-net:
+        aliases: [redis]
+    healthcheck:
+      test: '[ $$(valkey-cli --pass "$${REDIS_PASSWORD}" ping) = ''PONG'' ]'
+      start_period: 5s
+      timeout: 3s
+      interval: 1s
+      retries: 5
+
+  netbox-redis-cache:
+    image: docker.io/valkey/valkey:8.1-alpine
+    container_name: netbox-redis-cache
+    command:
+      - sh
+      - -c
+      - valkey-server --requirepass $$REDIS_PASSWORD
+    env_file: ../netbox-docker/env/redis-cache.env
+    volumes:
+      - netbox-redis-cache-data:/data
+    networks:
+      netbox-net:
+        aliases: [redis-cache]
+    healthcheck:
+      test: '[ $$(valkey-cli --pass "$${REDIS_PASSWORD}" ping) = ''PONG'' ]'
+      start_period: 5s
+      timeout: 3s
+      interval: 1s
+      retries: 5
+
+  nautobot:
+    image: ghcr.io/nautobot/nautobot:2.3
+    container_name: nautobot
+    depends_on:
+      nautobot-postgres:
+        condition: service_healthy
+      nautobot-redis:
+        condition: service_healthy
+    env_file: ./env/nautobot.env
+    volumes:
+      - nautobot-media:/opt/nautobot/media
+      - nautobot-static:/opt/nautobot/static
+      - ../nautobot-docker/extras:/opt/nautobot/extras:ro
+    ports:
+      - "8081:8080"
+    networks:
+      - nautobot-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  nautobot-worker:
+    image: ghcr.io/nautobot/nautobot:2.3
+    container_name: nautobot-worker
+    depends_on:
+      nautobot-postgres:
+        condition: service_healthy
+      nautobot-redis:
+        condition: service_healthy
+      nautobot:
+        condition: service_started
+    env_file: ./env/nautobot.env
+    command: ["nautobot-server", "rqworker"]
+    networks:
+      - nautobot-net
+
+  nautobot-beat:
+    image: ghcr.io/nautobot/nautobot:2.3
+    container_name: nautobot-beat
+    depends_on:
+      nautobot-postgres:
+        condition: service_healthy
+      nautobot-redis:
+        condition: service_healthy
+      nautobot:
+        condition: service_started
+    env_file: ./env/nautobot.env
+    command: ["nautobot-server", "celery", "beat", "-S", "redbeat.RedBeatScheduler"]
+    networks:
+      - nautobot-net
+
+  nautobot-postgres:
+    image: postgres:15
+    container_name: nautobot-postgres
+    env_file: ./env/nautobot-postgres.env
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    networks:
+      nautobot-net:
+        aliases: [postgres]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  nautobot-redis:
+    image: redis:7-alpine
+    container_name: nautobot-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./redis:/data
+    networks:
+      nautobot-net:
+        aliases: [redis]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  netbox-net:
+  nautobot-net:
+
+volumes:
+  netbox-media-files:
+  netbox-postgres-data:
+  netbox-redis-data:
+  netbox-redis-cache-data:
+  netbox-reports-files:
+  netbox-scripts-files:
+  nautobot-media:
+  nautobot-static:
