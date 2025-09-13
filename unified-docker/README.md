@@ -20,22 +20,32 @@ This directory contains a unified docker-compose setup that runs both NetBox and
 
 ## Quick Start
 
-1. **Start all services**:
+1. **First-time setup** (run once):
    ```bash
-   docker compose up -d --build
+   ./init-nautobot.sh
    ```
 
-2. **View logs**:
+2. **Start all services**:
+   ```bash
+   ./start.sh
+   ```
+
+3. **Clean start** (removes conflicting containers):
+   ```bash
+   ./start.sh --clean
+   ```
+
+4. **View logs**:
    ```bash
    docker compose logs -f
    ```
 
-3. **Stop all services**:
+5. **Stop all services**:
    ```bash
    docker compose down
    ```
 
-4. **Stop and remove volumes** (WARNING: This will delete all data):
+6. **Stop and remove volumes** (WARNING: This will delete all data):
    ```bash
    docker compose down -v
    ```

@@ -14,8 +14,8 @@ services:
       - netbox-scripts-files:/opt/netbox/netbox/scripts:rw
     ports:
       - "8080:8080"
-    networks:
-      - netbox-net
+    networks: [netbox-net]
+    restart: unless-stopped
     healthcheck:
       test: curl -f http://localhost:8080/login/ || exit 1
       start_period: 90s
@@ -28,17 +28,14 @@ services:
       netbox:
         condition: service_healthy
     env_file: ../netbox-docker/env/netbox.env
-    command:
-      - /opt/netbox/venv/bin/python
-      - /opt/netbox/netbox/manage.py
-      - rqworker
+    command: ["/opt/netbox/venv/bin/python", "/opt/netbox/netbox/manage.py", "rqworker"]
     volumes:
       - ../netbox-docker/configuration:/etc/netbox/config:z,ro
       - netbox-media-files:/opt/netbox/netbox/media:rw
       - netbox-reports-files:/opt/netbox/netbox/reports:rw
       - netbox-scripts-files:/opt/netbox/netbox/scripts:rw
-    networks:
-      - netbox-net
+    networks: [netbox-net]
+    restart: unless-stopped
     healthcheck:
       test: ps -aux | grep -v grep | grep -q rqworker || exit 1
       start_period: 20s
@@ -53,6 +50,7 @@ services:
     networks:
       netbox-net:
         aliases: [postgres]
+    restart: unless-stopped
     healthcheck:
       test: pg_isready -q -t 2 -d $$POSTGRES_DB -U $$POSTGRES_USER
       start_period: 20s
@@ -62,18 +60,16 @@ services:
 
   netbox-redis:
     image: docker.io/valkey/valkey:8.1-alpine
-    command:
-      - sh
-      - -c
-      - valkey-server --appendonly yes --requirepass $$REDIS_PASSWORD
+    command: ["sh", "-c", "valkey-server --appendonly yes --requirepass $$REDIS_PASSWORD"]
     env_file: ../netbox-docker/env/redis.env
     volumes:
       - netbox-redis-data:/data
     networks:
       netbox-net:
         aliases: [redis]
+    restart: unless-stopped
     healthcheck:
-      test: '[ $$(valkey-cli --pass "$${REDIS_PASSWORD}" ping) = ''PONG'' ]'
+      test: ['CMD-SHELL', '[ $$(valkey-cli --pass "$${REDIS_PASSWORD}" ping) = ''PONG'' ]']
       start_period: 5s
       timeout: 3s
       interval: 1s
@@ -81,18 +77,16 @@ services:
 
   netbox-redis-cache:
     image: docker.io/valkey/valkey:8.1-alpine
-    command:
-      - sh
-      - -c
-      - valkey-server --requirepass $$REDIS_PASSWORD
+    command: ["sh", "-c", "valkey-server --requirepass $$REDIS_PASSWORD"]
     env_file: ../netbox-docker/env/redis-cache.env
     volumes:
       - netbox-redis-cache-data:/data
     networks:
       netbox-net:
         aliases: [redis-cache]
+    restart: unless-stopped
     healthcheck:
-      test: '[ $$(valkey-cli --pass "$${REDIS_PASSWORD}" ping) = ''PONG'' ]'
+      test: ['CMD-SHELL', '[ $$(valkey-cli --pass "$${REDIS_PASSWORD}" ping) = ''PONG'' ]']
       start_period: 5s
       timeout: 3s
       interval: 1s
@@ -112,13 +106,15 @@ services:
       - ../nautobot-docker/extras:/opt/nautobot/extras:ro
     ports:
       - "8081:8080"
-    networks:
-      - nautobot-net
+    networks: [nautobot-net]
+    restart: unless-stopped
     healthcheck:
+      # IMPORTANT: probe internal 8080, not the published 8081
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 20
+      start_period: 30s
 
   nautobot-worker:
     image: ghcr.io/nautobot/nautobot:2.3
@@ -131,8 +127,8 @@ services:
         condition: service_started
     env_file: ./env/nautobot.env
     command: ["nautobot-server", "rqworker"]
-    networks:
-      - nautobot-net
+    networks: [nautobot-net]
+    restart: unless-stopped
 
   nautobot-beat:
     image: ghcr.io/nautobot/nautobot:2.3
@@ -145,8 +141,8 @@ services:
         condition: service_started
     env_file: ./env/nautobot.env
     command: ["nautobot-server", "celery", "beat", "-S", "redbeat.RedBeatScheduler"]
-    networks:
-      - nautobot-net
+    networks: [nautobot-net]
+    restart: unless-stopped
 
   nautobot-postgres:
     image: postgres:15
@@ -156,6 +152,7 @@ services:
     networks:
       nautobot-net:
         aliases: [postgres]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -170,6 +167,7 @@ services:
     networks:
       nautobot-net:
         aliases: [redis]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

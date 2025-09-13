@@ -1,45 +1,114 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Unified NetBox and Nautobot Startup Script
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_DIR"
+
+COMPOSE_CMD="docker compose"
+if ! $COMPOSE_CMD version >/dev/null 2>&1; then
+  if command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE_CMD="docker-compose"
+  else
+    echo "❌ Neither 'docker compose' nor 'docker-compose' found."
+    exit 1
+  fi
+fi
+
+CLEAN=0
+for arg in "$@"; do
+  case "$arg" in
+    --clean) CLEAN=1 ;;
+    *) echo "Unknown arg: $arg"; exit 1 ;;
+  esac
+done
 
 echo "🚀 Starting Unified NetBox and Nautobot Setup..."
 echo ""
 
-# Check if docker-compose is available
-if ! command -v docker-compose &> /dev/null && ! command -v docker &> /dev/null; then
-    echo "❌ Error: Docker is not installed or not in PATH"
-    exit 1
-fi
-
-# Use docker compose (newer) or docker-compose (legacy)
-if command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    COMPOSE_CMD="docker compose"
-elif command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-else
-    echo "❌ Error: Neither 'docker compose' nor 'docker-compose' is available"
-    exit 1
+# Optional clean-up to avoid container name collisions with other stacks
+if (( CLEAN )); then
+  echo "🧹 --clean requested: removing old standalone containers named 'netbox' or 'nautobot' (if any)"
+  docker rm -f netbox >/dev/null 2>&1 || true
+  docker rm -f nautobot >/dev/null 2>&1 || true
 fi
 
 echo "📦 Building and starting services..."
-export COMPOSE_PROJECT_NAME=unified-docker
 $COMPOSE_CMD up -d --build
 
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✅ Services started successfully!"
-    echo ""
-    echo "🌐 Access URLs:"
-    echo "   NetBox:  http://localhost:8080"
-    echo "   Nautobot: http://localhost:8081"
-    echo ""
-    echo "📊 To view logs: $COMPOSE_CMD logs -f"
-    echo "🛑 To stop: $COMPOSE_CMD down"
-    echo ""
-    echo "⏳ Services are starting up... This may take a few minutes."
-    echo "   Check the logs above for startup progress."
-else
-    echo ""
-    echo "❌ Failed to start services. Check the output above for errors."
-    exit 1
+echo ""
+echo "⏳ Waiting briefly for databases & redis to come up..."
+sleep 5
+
+# Ensure Nautobot media/static dir ownership inside container (idempotent)
+echo "🔧 Fixing Nautobot media/static ownership..."
+$COMPOSE_CMD run --rm -u 0 nautobot bash -lc 'mkdir -p /opt/nautobot/media/devicetype-images /opt/nautobot/static && chown -R nautobot:nautobot /opt/nautobot'
+
+# Run idempotent migrations & collectstatic for Nautobot
+echo "🗃️ Running Nautobot migrations..."
+$COMPOSE_CMD run --rm nautobot nautobot-server migrate
+
+echo "🖼️ Collecting Nautobot static files..."
+$COMPOSE_CMD run --rm nautobot nautobot-server collectstatic --noinput
+
+# Create superuser only if missing and password provided
+echo "👤 Ensuring Nautobot superuser exists (if configured)..."
+NA_USER="${NAUTOBOT_SUPERUSER_NAME:-}"
+NA_EMAIL="${NAUTOBOT_SUPERUSER_EMAIL:-}"
+NA_PASS="${NAUTOBOT_SUPERUSER_PASSWORD:-}"
+
+# Read from env file if not in shell env
+if [[ -z "${NA_USER}" || -z "${NA_EMAIL}" ]]; then
+  # shellcheck disable=SC1091
+  source ./env/nautobot.env || true
+  NA_USER="${NA_USER:-${NAUTOBOT_SUPERUSER_NAME:-}}"
+  NA_EMAIL="${NA_EMAIL:-${NAUTOBOT_SUPERUSER_EMAIL:-}}"
+  NA_PASS="${NA_PASS:-${NAUTOBOT_SUPERUSER_PASSWORD:-}}"
 fi
+
+if [[ -n "$NA_USER" && -n "$NA_EMAIL" ]]; then
+  echo "🔎 Checking for user '$NA_USER'..."
+  set +e
+  $COMPOSE_CMD run --rm nautobot bash -lc "nautobot-server shell -c \"from users.models import User; import os,sys; sys.exit(0 if User.objects.filter(username='$NA_USER').exists() else 1)\""
+  EXISTS=$?
+  set -e
+  if [[ $EXISTS -ne 0 ]]; then
+    if [[ -n "$NA_PASS" ]]; then
+      echo "➕ Creating superuser '$NA_USER'..."
+      $COMPOSE_CMD run --rm -e DJANGO_SUPERUSER_USERNAME="$NA_USER" \
+                             -e DJANGO_SUPERUSER_EMAIL="$NA_EMAIL" \
+                             -e DJANGO_SUPERUSER_PASSWORD="$NA_PASS" \
+                             nautobot nautobot-server createsuperuser --noinput || true
+    else
+      echo "⚠️ Superuser '$NA_USER' does not exist and no password provided. Skipping auto-create."
+      echo "   You can run: $COMPOSE_CMD run --rm nautobot nautobot-server createsuperuser"
+    fi
+  else
+    echo "✅ Superuser '$NA_USER' already exists."
+  fi
+else
+  echo "ℹ️ Superuser auto-create not configured (missing NAUTOBOT_SUPERUSER_* in env)."
+fi
+
+# Finally ensure all long-lived services are up
+echo ""
+$COMPOSE_CMD up -d
+
+echo ""
+echo "✅ Services started!"
+echo ""
+echo "🌐 Access URLs:"
+echo "   NetBox:   http://192.168.5.9:8080"
+echo "   Nautobot: http://192.168.5.9:8081"
+echo ""
+echo "📊 Logs (follow one):"
+echo "   $COMPOSE_CMD logs -f netbox"
+echo "   $COMPOSE_CMD logs -f nautobot"
+echo ""
+echo "🛑 Stop:"
+echo "   $COMPOSE_CMD down"
+echo ""
+echo "🧪 Healthcheck tips:"
+echo "   docker ps --format '{{.Names}}: {{.Status}}'"
+echo "   $COMPOSE_CMD logs -f nautobot"
+echo "   $COMPOSE_CMD logs -f netbox"
+echo ""
