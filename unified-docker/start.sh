@@ -22,6 +22,7 @@ else
 fi
 
 echo "📦 Building and starting services..."
+export COMPOSE_PROJECT_NAME=unified-docker
 $COMPOSE_CMD up -d --build
 
 if [ $? -eq 0 ]; then
