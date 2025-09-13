@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: nautobot-postgres
+    restart: unless-stopped
+    env_file: env/.env
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: nautobot-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  nautobot:
+    image: ghcr.io/nautobot/nautobot:2.3
+    container_name: nautobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: env/.env
+    # All needed env are provided via env/.env; no ${...} expansion needed here.
+    volumes:
+      - nautobot-media:/opt/nautobot/media
+      - nautobot-static:/opt/nautobot/static
+      - ./extras:/opt/nautobot/extras:ro
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  nautobot-worker:
+    image: ghcr.io/nautobot/nautobot:2.3
+    container_name: nautobot-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nautobot:
+        condition: service_started
+    env_file: env/.env
+    command: ["nautobot-server", "rqworker"]
+    restart: unless-stopped
+
+  nautobot-beat:
+    image: ghcr.io/nautobot/nautobot:2.3
+    container_name: nautobot-beat
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nautobot:
+        condition: service_started
+    env_file: env/.env
+    command: ["nautobot-server", "celery", "beat", "-S", "redbeat.RedBeatScheduler"]
+    restart: unless-stopped
+
+volumes:
+  nautobot-media:
+  nautobot-static:
