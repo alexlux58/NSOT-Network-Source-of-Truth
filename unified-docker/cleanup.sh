@@ -142,14 +142,31 @@ safe_rm_dir() {
   local dir="$1"
   if [[ -d "$dir" ]]; then
     echo "🗑️  Removing directory: $dir"
-    rm -rf "$dir" 2>/dev/null || {
-      echo "⚠️  Permission denied removing $dir. Try: sudo rm -rf \"$dir\""
-    }
+    if rm -rf "$dir" 2>/dev/null; then
+      echo "✅ Successfully removed $dir"
+    else
+      echo ""
+      echo "❌ PERMISSION DENIED: Cannot remove $dir"
+      echo "   This directory was likely created by Docker containers running as root."
+      echo ""
+      echo "🔧 MANUAL CLEANUP REQUIRED:"
+      echo "   Run this command to remove the directory:"
+      echo "   sudo rm -rf \"$dir\""
+      echo ""
+      echo "⚠️  WARNING: Without removing this directory, you may encounter"
+      echo "   migration conflicts on the next startup (e.g., 'column already exists'"
+      echo "   or 'duplicate key constraint' errors)."
+      echo ""
+      return 1
+    fi
   fi
 }
 
 # ---------- perform cleanup ----------
 down_services
+
+# Track permission errors for final summary
+PERMISSION_ERRORS=0
 
 case "$SCOPE" in
   nautobot|all)
@@ -159,7 +176,9 @@ case "$SCOPE" in
     # remove any project-scoped containers that may be dangling
     rm_by_partial_name '^unified-docker-nautobot'
     # redis cache/state (safe to delete)
-    safe_rm_dir "$NBOT_REDIS_DIR"
+    if ! safe_rm_dir "$NBOT_REDIS_DIR"; then
+      ((PERMISSION_ERRORS++))
+    fi
     # Nautobot media/static are mounted via named volumes; optional to wipe quickly
     if [[ "$HARD" == "yes" ]]; then
       rm_named_volumes "${NBOT_VOLS[@]}"
@@ -167,7 +186,9 @@ case "$SCOPE" in
     # DB wipe if requested
     if [[ "$WIPE_DB" == "yes" ]]; then
       if confirm "❗ Wipe Nautobot DB at $NBOT_DB_DIR? This forces full migrations next start."; then
-        safe_rm_dir "$NBOT_DB_DIR"
+        if ! safe_rm_dir "$NBOT_DB_DIR"; then
+          ((PERMISSION_ERRORS++))
+        fi
       else
         echo "➡️  Skipping Nautobot DB wipe."
       fi
@@ -205,4 +226,22 @@ if [[ "$PRUNE_IMAGES" == "yes" ]]; then
 fi
 
 echo "✅ Cleanup complete."
-echo "➡️  Next: ./start.sh"
+
+# Report permission errors if any
+if [[ $PERMISSION_ERRORS -gt 0 ]]; then
+  echo ""
+  echo "⚠️  CLEANUP INCOMPLETE: $PERMISSION_ERRORS permission error(s) occurred"
+  echo ""
+  echo "🔧 REQUIRED MANUAL STEPS:"
+  echo "   1. Remove directories with elevated privileges:"
+  echo "      sudo rm -rf postgres/ redis/"
+  echo ""
+  echo "   2. Then run a clean start:"
+  echo "      ./start.sh --clean"
+  echo ""
+  echo "⚠️  WARNING: Without removing these directories, you may encounter"
+  echo "   migration conflicts on startup (e.g., 'column already exists' errors)."
+  echo ""
+else
+  echo "➡️  Next: ./start.sh"
+fi

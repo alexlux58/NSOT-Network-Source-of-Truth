@@ -20,10 +20,12 @@ This directory contains a unified docker-compose setup that runs both NetBox and
 
 ## Quick Start
 
-1. **Clean start** (recommended for first run):
+1. **Fresh start** (recommended for first run or after issues):
    ```bash
    ./cleanup.sh --db
-   ./start.sh
+   # If permission errors occur, manually remove directories:
+   sudo rm -rf postgres/ redis/
+   ./start.sh --clean
    ```
 
 2. **Regular start**:
@@ -31,7 +33,7 @@ This directory contains a unified docker-compose setup that runs both NetBox and
    ./start.sh
    ```
 
-3. **Clean start** (removes conflicting containers):
+3. **Clean start** (removes conflicting containers only):
    ```bash
    ./start.sh --clean
    ```
@@ -51,20 +53,25 @@ This directory contains a unified docker-compose setup that runs both NetBox and
    ./test-nautobot-env.sh
    ```
 
-7. **View logs**:
+7. **Verify complete setup**:
+   ```bash
+   ./verify-setup.sh
+   ```
+
+8. **View logs**:
    ```bash
    docker compose logs -f
    ```
 
-8. **Stop all services**:
+9. **Stop all services**:
    ```bash
    docker compose down
    ```
 
-9. **Stop and remove volumes** (WARNING: This will delete all data):
-   ```bash
-   docker compose down -v
-   ```
+10. **Stop and remove volumes** (WARNING: This will delete all data):
+    ```bash
+    docker compose down -v
+    ```
 
 ## Configuration
 
@@ -91,23 +98,91 @@ This prevents conflicts while maintaining the hostname expectations from the ori
 - **NetBox**: Uses Docker volumes for data persistence
 - **Nautobot**: Uses local directories (`./postgres/`, `./redis/`) for data persistence
 
+## Fresh Start Procedure
+
+When you need to completely reset the environment (e.g., after migration conflicts or to start over):
+
+### Step 1: Clean Everything
+```bash
+./cleanup.sh --db
+```
+
+### Step 2: Handle Permission Errors (if any)
+If you see permission errors during cleanup:
+```bash
+sudo rm -rf postgres/ redis/
+```
+
+### Step 3: Fresh Start
+```bash
+./start.sh --clean
+```
+
+### Step 4: Verify Success
+```bash
+# Check that both services are running
+docker compose ps
+
+# Test database connections
+./test-db-connections.sh
+
+# Test Nautobot environment
+./test-nautobot-env.sh
+
+# Access the services
+# NetBox: http://192.168.5.9:8080
+# Nautobot: http://192.168.5.9:8081
+```
+
+### Why This Procedure Works
+- **Complete database wipe**: Removes all partial migration state
+- **Fresh migrations**: Nautobot runs all migrations from scratch
+- **No conflicts**: Eliminates "column already exists" or "duplicate key" errors
+- **Clean slate**: Both services start with fresh, consistent state
+
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Nautobot Database Connection Error**:
+1. **Nautobot Migration Conflicts**:
+   - **Error**: `UndefinedColumn: column "level" of relation "dcim_inventoryitem" does not exist` or `duplicate key value violates unique constraint`
+   - **Cause**: Incomplete database cleanup left partial migration state
+   - **Solution**: 
+     ```bash
+     # Full database reset
+     ./cleanup.sh --db
+     # If permission errors occur, manually remove directories:
+     sudo rm -rf postgres/ redis/
+     # Then clean start
+     ./start.sh --clean
+     ```
+   - **Prevention**: Always use `./cleanup.sh --db` before fresh starts
+
+2. **Permission Denied During Cleanup**:
+   - **Error**: `Permission denied` when removing `postgres/` or `redis/` directories
+   - **Cause**: Directories created by Docker containers running as root
+   - **Solution**: 
+     ```bash
+     sudo rm -rf postgres/ redis/
+     ./start.sh --clean
+     ```
+   - **Note**: The cleanup script will now clearly indicate when manual removal is needed
+
+3. **Nautobot Database Connection Error**:
    - **Error**: `django.db.utils.OperationalError: connection to server at "localhost" (::1), port 5432 failed`
    - **Cause**: Nautobot is trying to connect to localhost instead of the PostgreSQL service
    - **Solution**: Ensure `NAUTOBOT_DB_HOST=postgres` in `env/nautobot.env`
    - **Test**: Run `./test-nautobot-env.sh` to verify environment variables
 
-2. **Container Name Conflicts**:
+4. **Container Name Conflicts**:
    - **Error**: `Conflict. The container name "/netbox" is already in use`
    - **Solution**: Run `./cleanup.sh --clean` or `./start.sh --clean`
 
-3. **Database Not Ready**:
-   - **Error**: Services fail to start due to database connectivity
-   - **Solution**: Wait for databases to be ready, or restart with `./start.sh`
+5. **Database Not Ready Timeout**:
+   - **Error**: `PostgreSQL not ready after 30s` on first startup
+   - **Cause**: Fresh database initialization takes longer
+   - **Solution**: Wait a bit longer and re-run `./start.sh --clean`
+   - **Note**: Subsequent starts are faster after initial setup
 
 ### Debugging Commands
 
@@ -152,6 +227,7 @@ This prevents conflicts while maintaining the hostname expectations from the ori
 - **`create-users.sh`**: Interactive user creation for both services
 - **`test-db-connections.sh`**: Test database connectivity
 - **`test-nautobot-env.sh`**: Test Nautobot environment variables
+- **`verify-setup.sh`**: Comprehensive setup verification and health checks
 
 ### Script Options
 ```bash
