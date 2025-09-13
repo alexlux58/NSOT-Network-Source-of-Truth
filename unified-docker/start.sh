@@ -33,11 +33,27 @@ if (( CLEAN )); then
 fi
 
 echo "📦 Building and starting services..."
+export COMPOSE_PROJECT_NAME=unified-docker
 $COMPOSE_CMD up -d --build
 
 echo ""
-echo "⏳ Waiting briefly for databases & redis to come up..."
-sleep 5
+echo "⏳ Waiting for databases & redis to come up..."
+
+# Wait for NetBox PostgreSQL
+echo "🔍 Waiting for NetBox PostgreSQL..."
+timeout 30 bash -c 'until docker compose exec netbox-postgres pg_isready -q -t 2 -d netbox -U netbox; do sleep 1; done' || {
+  echo "❌ NetBox PostgreSQL not ready after 30s"
+  exit 1
+}
+
+# Wait for Nautobot PostgreSQL  
+echo "🔍 Waiting for Nautobot PostgreSQL..."
+timeout 30 bash -c 'until docker compose exec nautobot-postgres pg_isready -q -t 2 -d nautobot -U nautobot; do sleep 1; done' || {
+  echo "❌ Nautobot PostgreSQL not ready after 30s"
+  exit 1
+}
+
+echo "✅ All databases are ready"
 
 # Ensure Nautobot media/static dir ownership inside container (idempotent)
 echo "🔧 Fixing Nautobot media/static ownership..."
