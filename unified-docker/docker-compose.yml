@@ -148,7 +148,7 @@ services:
     image: postgres:15
     env_file: ./env/nautobot-postgres.env
     volumes:
-      - ./postgres:/var/lib/postgresql/data
+      - nautobot-postgres-data:/var/lib/postgresql/data
     networks:
       nautobot-net:
         aliases: [postgres]
@@ -187,3 +187,4 @@ volumes:
   netbox-scripts-files:
   nautobot-media:
   nautobot-static:
+  nautobot-postgres-data:
