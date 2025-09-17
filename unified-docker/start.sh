@@ -60,37 +60,77 @@ fi
 
 echo "📦 Building and starting services..."
 export COMPOSE_PROJECT_NAME=unified-docker
-$COMPOSE_CMD up -d --build
 
-echo ""
+# Start databases and Redis first
+echo "🗄️ Starting databases and Redis..."
+$COMPOSE_CMD up -d netbox-postgres netbox-redis netbox-redis-cache nautobot-postgres nautobot-redis
+
+# Wait for databases to be ready
 echo "⏳ Waiting for databases & redis to come up..."
 
 # Wait for NetBox PostgreSQL
 echo "🔍 Waiting for NetBox PostgreSQL..."
-timeout 30 bash -c 'until docker compose exec netbox-postgres pg_isready -q -t 2 -d netbox -U netbox; do sleep 1; done' || {
-  echo "❌ NetBox PostgreSQL not ready after 30s"
-  exit 1
-}
+for i in {1..30}; do
+  if docker compose exec netbox-postgres pg_isready -q -t 2 -d netbox -U netbox 2>/dev/null; then
+    break
+  fi
+  if [ $i -eq 30 ]; then
+    echo "❌ NetBox PostgreSQL not ready after 30s"
+    exit 1
+  fi
+  sleep 1
+done
 
 # Wait for Nautobot PostgreSQL  
 echo "🔍 Waiting for Nautobot PostgreSQL..."
-timeout 30 bash -c 'until docker compose exec nautobot-postgres pg_isready -q -t 2 -d nautobot -U nautobot; do sleep 1; done' || {
-  echo "❌ Nautobot PostgreSQL not ready after 30s"
-  exit 1
-}
+for i in {1..30}; do
+  if docker compose exec nautobot-postgres pg_isready -q -t 2 -d nautobot -U nautobot 2>/dev/null; then
+    break
+  fi
+  if [ $i -eq 30 ]; then
+    echo "❌ Nautobot PostgreSQL not ready after 30s"
+    exit 1
+  fi
+  sleep 1
+done
 
 echo "✅ All databases are ready"
+
+# Start web services (these will run migrations)
+echo "🌐 Starting web services..."
+$COMPOSE_CMD up -d netbox nautobot
+
+# Wait for web services to be ready (migrations complete)
+echo "⏳ Waiting for web services to complete migrations..."
+echo "🔍 Waiting for NetBox to be ready..."
+for i in {1..60}; do
+  if docker compose exec netbox curl -fsS http://localhost:8080/login/ >/dev/null 2>&1; then
+    break
+  fi
+  if [ $i -eq 60 ]; then
+    echo "❌ NetBox not ready after 60s"
+    exit 1
+  fi
+  sleep 1
+done
+
+echo "🔍 Waiting for Nautobot to be ready..."
+for i in {1..60}; do
+  if docker compose exec nautobot curl -fsS http://localhost:8080/ >/dev/null 2>&1; then
+    break
+  fi
+  if [ $i -eq 60 ]; then
+    echo "❌ Nautobot not ready after 60s"
+    exit 1
+  fi
+  sleep 1
+done
+
+echo "✅ Web services are ready"
 
 # Ensure Nautobot media/static dir ownership inside container (idempotent)
 echo "🔧 Fixing Nautobot media/static ownership..."
 $COMPOSE_CMD run --rm -u 0 nautobot bash -lc 'mkdir -p /opt/nautobot/media/devicetype-images /opt/nautobot/static && chown -R nautobot:nautobot /opt/nautobot'
-
-# Run idempotent migrations & collectstatic for Nautobot
-echo "🗃️ Running Nautobot migrations..."
-$COMPOSE_CMD run --rm nautobot nautobot-server migrate
-
-echo "🖼️ Collecting Nautobot static files..."
-$COMPOSE_CMD run --rm nautobot nautobot-server collectstatic --noinput
 
 # Create superuser only if missing and password provided
 echo "👤 Ensuring Nautobot superuser exists (if configured)..."
@@ -131,9 +171,9 @@ else
   echo "ℹ️ Superuser auto-create not configured (missing NAUTOBOT_SUPERUSER_* in env)."
 fi
 
-# Finally ensure all long-lived services are up
-echo ""
-$COMPOSE_CMD up -d
+# Start worker services after web services are ready
+echo "👷 Starting worker services..."
+$COMPOSE_CMD up -d netbox-worker nautobot-worker nautobot-beat
 
 echo ""
 echo "✅ Services started!"

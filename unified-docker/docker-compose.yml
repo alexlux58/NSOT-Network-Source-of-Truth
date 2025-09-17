@@ -126,6 +126,8 @@ services:
       nautobot:
         condition: service_started
     env_file: ./env/nautobot.env
+    environment:
+      - NAUTOBOT_SKIP_STARTUP_MIGRATIONS=true
     command: ["nautobot-server", "rqworker"]
     networks: [nautobot-net]
     restart: unless-stopped
@@ -140,12 +142,14 @@ services:
       nautobot:
         condition: service_started
     env_file: ./env/nautobot.env
+    environment:
+      - NAUTOBOT_SKIP_STARTUP_MIGRATIONS=true
     command: ["nautobot-server", "celery", "beat", "-S", "redbeat.RedBeatScheduler"]
     networks: [nautobot-net]
     restart: unless-stopped
 
   nautobot-postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     env_file: ./env/nautobot-postgres.env
     volumes:
       - nautobot-postgres-data:/var/lib/postgresql/data

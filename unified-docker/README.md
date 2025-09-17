@@ -20,6 +20,7 @@ This directory contains a unified docker-compose setup that runs both NetBox and
 
 ## Quick Start
 
+### Option 1: Unified Setup (Recommended)
 1. **Fresh start** (recommended for first run or after issues):
    ```bash
    ./cleanup.sh --db
@@ -37,6 +38,77 @@ This directory contains a unified docker-compose setup that runs both NetBox and
    ```bash
    ./start.sh --clean
    ```
+
+### Option 2: Individual Services
+If you prefer to run NetBox and Nautobot separately:
+
+**NetBox Only:**
+```bash
+cd ../netbox-docker
+docker compose up -d
+# Access: http://192.168.5.9:8080
+```
+
+**Nautobot Only:**
+```bash
+cd ../nautobot-docker  
+docker compose up -d
+# Access: http://192.168.5.9:8081
+```
+
+**⚠️ Important:** If running individual services, be aware of:
+- **Port conflicts** - Both use port 8080 by default
+- **Database conflicts** - May interfere with unified setup
+- **Configuration differences** - Individual setups may have different configs
+- **Migration issues** - Individual services may have the same migration race conditions
+
+### Option 3: Nuclear Docker Cleanup
+If you want to completely reset your entire Docker environment:
+
+```bash
+./nuclear-cleanup.sh
+```
+
+**⚠️ WARNING:** This will remove ALL Docker containers, images, volumes, and networks on your system. Use only when you want to start completely fresh.
+
+# create an admin user interactively
+docker exec -it nautobot nautobot-server createsuperuser
+
+# interactive superuser creation
+docker compose exec netbox /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py createsuperuser
+
+
+## Improved Startup Process
+
+The startup script now uses a **sequential approach** to prevent migration conflicts:
+
+### Phase 1: Database Initialization
+- Starts PostgreSQL and Redis for both NetBox and Nautobot
+- Waits for databases to be ready and healthy
+- Uses proper health checks and timeouts
+
+### Phase 2: Web Services (Migrations)
+- Starts NetBox and Nautobot web containers
+- These containers run database migrations automatically
+- Waits for both services to be fully ready before proceeding
+
+### Phase 3: Worker Services
+- Starts NetBox worker, Nautobot worker, and Nautobot beat
+- Worker containers skip migrations (using `NAUTOBOT_SKIP_STARTUP_MIGRATIONS=true`)
+- No race conditions or database conflicts
+
+### Benefits
+- ✅ **No more migration conflicts** - only web containers run migrations
+- ✅ **Reliable startup** - proper sequencing and health checks
+- ✅ **Faster recovery** - no need to manually fix corrupted databases
+- ✅ **Better error handling** - clear messages and proper timeouts
+
+### Technical Changes Made
+- **Sequential Container Startup**: Databases → Web Services → Workers
+- **Environment Variables**: Added `NAUTOBOT_SKIP_STARTUP_MIGRATIONS=true` to worker containers
+- **Health Checks**: Improved database readiness detection with proper timeouts
+- **Error Handling**: Replaced macOS-incompatible `timeout` command with custom loops
+- **Dependency Management**: Workers depend on web services being ready, not just started
 
 4. **Create users** (interactive):
    ```bash
@@ -140,23 +212,31 @@ docker compose ps
 - **No conflicts**: Eliminates "column already exists" or "duplicate key" errors
 - **Clean slate**: Both services start with fresh, consistent state
 
+## Migration Race Condition Fix
+
+**IMPORTANT**: This setup has been fixed to prevent concurrent migration conflicts that were causing database corruption.
+
+### What Was Fixed
+- **Sequential Startup**: Databases start first, then web services, then workers
+- **Migration Isolation**: Only web containers run migrations; workers skip them
+- **Proper Dependencies**: Workers wait for web services to complete migrations
+- **Environment Variables**: Added `NAUTOBOT_SKIP_STARTUP_MIGRATIONS=true` to worker containers
+
+### How It Works Now
+1. **Phase 1**: Start databases and Redis
+2. **Phase 2**: Start web services (NetBox + Nautobot) - these run migrations
+3. **Phase 3**: Wait for web services to be ready (migrations complete)
+4. **Phase 4**: Start worker services (no migration conflicts)
+
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Nautobot Migration Conflicts**:
-   - **Error**: `UndefinedColumn: column "level" of relation "dcim_inventoryitem" does not exist` or `duplicate key value violates unique constraint`
-   - **Cause**: Incomplete database cleanup left partial migration state
-   - **Solution**: 
-     ```bash
-     # Full database reset
-     ./cleanup.sh --db
-     # If permission errors occur, manually remove directories:
-     sudo rm -rf postgres/ redis/
-     # Then clean start
-     ./start.sh --clean
-     ```
-   - **Prevention**: Always use `./cleanup.sh --db` before fresh starts
+1. **Nautobot Migration Conflicts** (FIXED):
+   - **Error**: `duplicate key value violates unique constraint` or `column already exists`
+   - **Cause**: Multiple containers running migrations simultaneously (RACE CONDITION)
+   - **Solution**: This is now fixed with sequential startup - no manual intervention needed
+   - **If you still see this**: Run `./cleanup.sh --db` and `./start.sh --clean`
 
 2. **Permission Denied During Cleanup**:
    - **Error**: `Permission denied` when removing `postgres/` or `redis/` directories
@@ -223,7 +303,8 @@ docker compose ps
 
 ### Core Scripts
 - **`start.sh`**: Main startup script with database wait logic and auto-initialization
-- **`cleanup.sh`**: Comprehensive cleanup utility with multiple options
+- **`cleanup.sh`**: Comprehensive cleanup utility with multiple options (project-specific)
+- **`nuclear-cleanup.sh`**: Complete Docker system cleanup (removes ALL Docker resources)
 - **`create-users.sh`**: Interactive user creation for both services
 - **`test-db-connections.sh`**: Test database connectivity
 - **`test-nautobot-env.sh`**: Test Nautobot environment variables
