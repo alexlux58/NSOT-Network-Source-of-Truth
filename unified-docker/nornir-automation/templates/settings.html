@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Nornir Automation{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Settings</h1>
+</div>
+
+<!-- Settings Tabs -->
+<ul class="nav nav-tabs" id="settingsTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab">
+            <i class="fas fa-cog"></i> General
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="inventory-tab" data-bs-toggle="tab" data-bs-target="#inventory" type="button" role="tab">
+            <i class="fas fa-server"></i> Inventory
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="validation-tab" data-bs-toggle="tab" data-bs-target="#validation" type="button" role="tab">
+            <i class="fas fa-check-circle"></i> Validation
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="integrations-tab" data-bs-toggle="tab" data-bs-target="#integrations" type="button" role="tab">
+            <i class="fas fa-plug"></i> Integrations
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="settingsTabsContent">
+    <!-- General Settings -->
+    <div class="tab-pane fade show active" id="general" role="tabpanel">
+        <div class="row mt-4">
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">General Settings</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="generalSettingsForm">
+                            <div class="form-group mb-3">
+                                <label for="appName">Application Name</label>
+                                <input type="text" class="form-control" id="appName" value="Nornir Automation">
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="timezone">Timezone</label>
+                                <select class="form-control" id="timezone">
+                                    <option value="UTC">UTC</option>
+                                    <option value="America/New_York">Eastern Time</option>
+                                    <option value="America/Chicago">Central Time</option>
+                                    <option value="America/Denver">Mountain Time</option>
+                                    <option value="America/Los_Angeles">Pacific Time</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="logLevel">Log Level</label>
+                                <select class="form-control" id="logLevel">
+                                    <option value="DEBUG">DEBUG</option>
+                                    <option value="INFO" selected>INFO</option>
+                                    <option value="WARNING">WARNING</option>
+                                    <option value="ERROR">ERROR</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enableNotifications" checked>
+                                    <label class="form-check-label" for="enableNotifications">
+                                        Enable Notifications
+                                    </label>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Settings -->
+    <div class="tab-pane fade" id="inventory" role="tabpanel">
+        <div class="row mt-4">
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Inventory Settings</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="inventorySettingsForm">
+                            <div class="form-group mb-3">
+                                <label for="inventoryPath">Inventory Path</label>
+                                <input type="text" class="form-control" id="inventoryPath" value="/app/inventory" readonly>
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="defaultUsername">Default Username</label>
+                                <input type="text" class="form-control" id="defaultUsername" value="admin">
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="defaultPassword">Default Password</label>
+                                <input type="password" class="form-control" id="defaultPassword" value="admin123">
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="defaultPort">Default SSH Port</label>
+                                <input type="number" class="form-control" id="defaultPort" value="22">
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="connectionTimeout">Connection Timeout (seconds)</label>
+                                <input type="number" class="form-control" id="connectionTimeout" value="30">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validation Settings -->
+    <div class="tab-pane fade" id="validation" role="tabpanel">
+        <div class="row mt-4">
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Validation Settings</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="validationSettingsForm">
+                            <div class="form-group mb-3">
+                                <label for="configPath">Configuration Path</label>
+                                <input type="text" class="form-control" id="configPath" value="/app/configs" readonly>
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="validationTimeout">Validation Timeout (seconds)</label>
+                                <input type="number" class="form-control" id="validationTimeout" value="60">
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="maxConcurrent">Max Concurrent Validations</label>
+                                <input type="number" class="form-control" id="maxConcurrent" value="10">
+                            </div>
+                            <div class="form-group mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="autoSaveSOT" checked>
+                                    <label class="form-check-label" for="autoSaveSOT">
+                                        Auto-save Source of Truth
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enableDriftDetection" checked>
+                                    <label class="form-check-label" for="enableDriftDetection">
+                                        Enable Drift Detection
+                                    </label>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Integrations Settings -->
+    <div class="tab-pane fade" id="integrations" role="tabpanel">
+        <div class="row mt-4">
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Integrations</h6>
+                    </div>
+                    <div class="card-body">
+                        <!-- NetBox Integration -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="m-0 font-weight-bold">NetBox Integration</h6>
+                            </div>
+                            <div class="card-body">
+                                <form id="netboxSettingsForm">
+                                    <div class="form-group mb-3">
+                                        <label for="netboxUrl">NetBox URL</label>
+                                        <input type="url" class="form-control" id="netboxUrl" value="http://netbox:8080">
+                                    </div>
+                                    <div class="form-group mb-3">
+                                        <label for="netboxToken">API Token</label>
+                                        <input type="password" class="form-control" id="netboxToken" placeholder="Enter NetBox API token">
+                                    </div>
+                                    <div class="form-group mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="netboxEnabled">
+                                            <label class="form-check-label" for="netboxEnabled">
+                                                Enable NetBox Integration
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-primary" onclick="testNetBoxConnection()">
+                                        <i class="fas fa-test-tube"></i> Test Connection
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Nautobot Integration -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="m-0 font-weight-bold">Nautobot Integration</h6>
+                            </div>
+                            <div class="card-body">
+                                <form id="nautobotSettingsForm">
+                                    <div class="form-group mb-3">
+                                        <label for="nautobotUrl">Nautobot URL</label>
+                                        <input type="url" class="form-control" id="nautobotUrl" value="http://nautobot:8080">
+                                    </div>
+                                    <div class="form-group mb-3">
+                                        <label for="nautobotToken">API Token</label>
+                                        <input type="password" class="form-control" id="nautobotToken" placeholder="Enter Nautobot API token">
+                                    </div>
+                                    <div class="form-group mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="nautobotEnabled">
+                                            <label class="form-check-label" for="nautobotEnabled">
+                                                Enable Nautobot Integration
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-primary" onclick="testNautobotConnection()">
+                                        <i class="fas fa-test-tube"></i> Test Connection
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Save Button -->
+<div class="row mt-4">
+    <div class="col-lg-12">
+        <div class="card shadow">
+            <div class="card-body text-center">
+                <button type="button" class="btn btn-primary btn-lg" onclick="saveSettings()">
+                    <i class="fas fa-save"></i> Save All Settings
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    loadSettings();
+});
+
+async function loadSettings() {
+    try {
+        // Load settings from API
+        const response = await apiCall('/api/settings');
+        const settings = response.settings || {};
+        
+        // Populate forms with loaded settings
+        populateForm('generalSettingsForm', settings.general || {});
+        populateForm('inventorySettingsForm', settings.inventory || {});
+        populateForm('validationSettingsForm', settings.validation || {});
+        populateForm('netboxSettingsForm', settings.netbox || {});
+        populateForm('nautobotSettingsForm', settings.nautobot || {});
+        
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+        showAlert('Failed to load settings', 'danger');
+    }
+}
+
+function populateForm(formId, settings) {
+    const form = document.getElementById(formId);
+    if (!form) return;
+    
+    Object.keys(settings).forEach(key => {
+        const element = form.querySelector(`#${key}`);
+        if (element) {
+            if (element.type === 'checkbox') {
+                element.checked = settings[key];
+            } else {
+                element.value = settings[key];
+            }
+        }
+    });
+}
+
+async function saveSettings() {
+    try {
+        const settings = {
+            general: getFormData('generalSettingsForm'),
+            inventory: getFormData('inventorySettingsForm'),
+            validation: getFormData('validationSettingsForm'),
+            netbox: getFormData('netboxSettingsForm'),
+            nautobot: getFormData('nautobotSettingsForm')
+        };
+        
+        showAlert('Saving settings...', 'info');
+        
+        const response = await apiCall('/api/settings', {
+            method: 'POST',
+            body: JSON.stringify(settings)
+        });
+        
+        showAlert('Settings saved successfully', 'success');
+        
+    } catch (error) {
+        console.error('Failed to save settings:', error);
+        showAlert('Failed to save settings: ' + error.message, 'danger');
+    }
+}
+
+function getFormData(formId) {
+    const form = document.getElementById(formId);
+    const formData = new FormData(form);
+    const data = {};
+    
+    for (let [key, value] of formData.entries()) {
+        data[key] = value;
+    }
+    
+    // Handle checkboxes
+    const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        data[checkbox.id] = checkbox.checked;
+    });
+    
+    return data;
+}
+
+async function testNetBoxConnection() {
+    try {
+        showAlert('Testing NetBox connection...', 'info');
+        
+        const response = await apiCall('/api/integrations/netbox/test', {
+            method: 'POST',
+            body: JSON.stringify({
+                url: document.getElementById('netboxUrl').value,
+                token: document.getElementById('netboxToken').value
+            })
+        });
+        
+        showAlert('NetBox connection successful', 'success');
+        
+    } catch (error) {
+        console.error('NetBox connection test failed:', error);
+        showAlert('NetBox connection failed: ' + error.message, 'danger');
+    }
+}
+
+async function testNautobotConnection() {
+    try {
+        showAlert('Testing Nautobot connection...', 'info');
+        
+        const response = await apiCall('/api/integrations/nautobot/test', {
+            method: 'POST',
+            body: JSON.stringify({
+                url: document.getElementById('nautobotUrl').value,
+                token: document.getElementById('nautobotToken').value
+            })
+        });
+        
+        showAlert('Nautobot connection successful', 'success');
+        
+    } catch (error) {
+        console.error('Nautobot connection test failed:', error);
+        showAlert('Nautobot connection failed: ' + error.message, 'danger');
+    }
+}
+</script>
+{% endblock %}
+

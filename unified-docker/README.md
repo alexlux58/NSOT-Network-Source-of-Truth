@@ -18,6 +18,12 @@ This directory contains a unified docker-compose setup that runs both NetBox and
 - **Configuration**: Uses local `./env/` files
 - **Default Credentials**: nautobot/nautobot (change in production)
 
+### Nornir Automation
+- **URL**: http://192.168.5.9:8082
+- **Purpose**: Network configuration validation and automation
+- **Features**: NAPALM integration, configuration drift detection, source-of-truth management
+- **API Documentation**: http://192.168.5.9:8082/api/docs/
+
 ## Quick Start
 
 ### Option 1: Unified Setup (Recommended)
@@ -37,6 +43,12 @@ This directory contains a unified docker-compose setup that runs both NetBox and
 3. **Clean start** (removes conflicting containers only):
    ```bash
    ./start.sh --clean
+   ```
+
+4. **Start with Nornir Automation**:
+   ```bash
+   ./start.sh
+   ./start-nornir.sh
    ```
 
 ### Option 2: Individual Services
@@ -156,6 +168,147 @@ The startup script now uses a **sequential approach** to prevent migration confl
 - Environment variables are in `./env/nautobot.env`
 - Database configuration is in `./env/nautobot-postgres.env`
 - **IMPORTANT**: Change the `SECRET_KEY` in `./env/nautobot.env` for production use
+
+## Nornir Automation Features
+
+The Nornir automation service provides comprehensive network configuration validation and management capabilities:
+
+### 🔧 Core Features
+
+- **Configuration Validation**: Compare live device configurations against source-of-truth
+- **Drift Detection**: Automatically detect configuration changes and drift
+- **Multi-Vendor Support**: Support for Cisco, Juniper, Arista, HP, Fortinet, and more via NAPALM
+- **Source of Truth Management**: Store and manage reference configurations
+- **Web Interface**: Modern, responsive web UI for all operations
+- **REST API**: Full REST API for integration with other tools
+
+### 📊 Configuration Validation
+
+- **Live vs Source-of-Truth**: Compare running configurations with stored reference configs
+- **Line-by-Line Analysis**: Detailed comparison showing missing and extra lines
+- **Bulk Validation**: Validate multiple devices simultaneously
+- **Group-based Validation**: Run validation on specific device groups (routers, switches, etc.)
+- **Dry Run Mode**: Safe validation without making changes
+
+### 🗂️ Inventory Management
+
+- **Device Discovery**: Automatic device discovery from NetBox and Nautobot
+- **Multi-Source Sync**: Sync inventory from multiple sources
+- **Group Management**: Organize devices into logical groups
+- **Vendor Mapping**: Automatic mapping of vendors to NAPALM drivers
+- **Custom Attributes**: Store custom device attributes and metadata
+
+### 📈 Reporting & Analytics
+
+- **Multiple Formats**: Generate reports in JSON, CSV, Excel, and HTML formats
+- **Validation History**: Track validation results over time
+- **Drift Analytics**: Analyze configuration drift patterns
+- **Compliance Reports**: Generate compliance and audit reports
+- **Scheduled Reports**: Automated report generation
+
+### 🔌 Integrations
+
+- **NetBox Integration**: Sync device inventory and metadata
+- **Nautobot Integration**: Sync device inventory and metadata
+- **API Integration**: RESTful API for external tool integration
+- **Webhook Support**: Send notifications on validation results
+
+### 🚀 Getting Started with Nornir Automation
+
+1. **Access the Web Interface**:
+   ```bash
+   # Open in browser
+   http://localhost:8082
+   ```
+
+2. **Set up Device Inventory**:
+   ```bash
+   # Create sample inventory
+   docker compose exec nornir-automation python scripts/setup_inventory.py --sample
+   
+   # Sync from NetBox
+   docker compose exec nornir-automation python scripts/setup_inventory.py --netbox YOUR_API_TOKEN
+   
+   # Sync from Nautobot
+   docker compose exec nornir-automation python scripts/setup_inventory.py --nautobot YOUR_API_TOKEN
+   ```
+
+3. **Run Configuration Validation**:
+   ```bash
+   # Validate all devices
+   docker compose exec nornir-automation python scripts/validate_configs.py validate --device-group all
+   
+   # Validate specific group
+   docker compose exec nornir-automation python scripts/validate_configs.py validate --device-group routers
+   
+   # Compare specific device
+   docker compose exec nornir-automation python scripts/validate_configs.py compare rtr-01
+   ```
+
+4. **Save Source of Truth**:
+   ```bash
+   # Save current config as source of truth
+   docker compose exec nornir-automation python scripts/validate_configs.py save-sot rtr-01 --config-type running
+   ```
+
+### 📚 API Usage
+
+The Nornir automation service provides a comprehensive REST API:
+
+```bash
+# Health check
+curl http://localhost:8082/api/health
+
+# Get device inventory
+curl http://localhost:8082/api/inventory
+
+# Run validation
+curl -X POST http://localhost:8082/api/validate \
+  -H "Content-Type: application/json" \
+  -d '{"device_group": "all", "config_type": "running", "dry_run": true}'
+
+# Get reports
+curl http://localhost:8082/api/reports
+```
+
+### 🔧 Configuration
+
+Key configuration files and directories:
+
+- **Inventory**: `./nornir-automation/inventory/` - Device inventory files
+- **Configs**: `./nornir-automation/configs/` - Source-of-truth configurations
+- **Reports**: `./nornir-automation/reports/` - Generated reports
+- **Logs**: `./nornir-automation/logs/` - Application logs
+
+### 🛠️ Troubleshooting
+
+Common issues and solutions:
+
+1. **Service not starting**:
+   ```bash
+   # Check logs
+   docker compose logs nornir-automation
+   
+   # Restart service
+   docker compose restart nornir-automation
+   ```
+
+2. **Device connection issues**:
+   - Verify device credentials in inventory files
+   - Check network connectivity to devices
+   - Ensure NAPALM drivers are installed for your device type
+
+3. **Validation failures**:
+   - Check device connectivity
+   - Verify device credentials
+   - Review validation logs for specific error messages
+
+### 📖 Additional Resources
+
+- **API Documentation**: http://localhost:8082/api/docs/
+- **Nornir Documentation**: https://nornir.readthedocs.io/
+- **NAPALM Documentation**: https://napalm.readthedocs.io/
+- **Source Code**: Available in `./nornir-automation/` directory
 
 ## Network Isolation
 

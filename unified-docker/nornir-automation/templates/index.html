@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Nornir Automation{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshDashboard()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Devices</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-devices">-</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-server fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Devices in Sync</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="devices-sync">-</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Drift Detected</div>
+                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="drift-detected">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-danger shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Errors</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="errors">-</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-lg-8">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Validation Status Over Time</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-area">
+                    <canvas id="validationChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Device Status Distribution</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-pie pt-4 pb-2">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Validations -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Recent Validation Results</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="recentValidations">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Status</th>
+                                <th>Drift</th>
+                                <th>Issues</th>
+                                <th>Timestamp</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="loading">
+                                        <i class="fas fa-spinner fa-spin"></i> Loading...
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <button class="btn btn-primary btn-block" onclick="runValidation('all')">
+                            <i class="fas fa-play"></i> Validate All Devices
+                        </button>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <button class="btn btn-success btn-block" onclick="runValidation('routers')">
+                            <i class="fas fa-route"></i> Validate Routers
+                        </button>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <button class="btn btn-info btn-block" onclick="runValidation('switches')">
+                            <i class="fas fa-sitemap"></i> Validate Switches
+                        </button>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <button class="btn btn-warning btn-block" onclick="generateReport()">
+                            <i class="fas fa-file-export"></i> Generate Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let validationChart, statusChart;
+
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+    initializeCharts();
+});
+
+async function loadDashboardData() {
+    try {
+        // Load device inventory
+        const inventoryResponse = await apiCall('/api/inventory');
+        const devices = inventoryResponse.inventory.hosts || {};
+        const deviceCount = Object.keys(devices).length;
+        
+        document.getElementById('total-devices').textContent = deviceCount;
+        
+        // Load recent validation results
+        await loadRecentValidations();
+        
+    } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+        showAlert('Failed to load dashboard data', 'danger');
+    }
+}
+
+async function loadRecentValidations() {
+    try {
+        const response = await apiCall('/api/validation');
+        const results = response.results || [];
+        
+        // Update summary cards
+        const devicesWithDrift = results.filter(r => r.drift_detected).length;
+        const devicesWithErrors = results.filter(r => r.status === 'error').length;
+        const devicesInSync = results.length - devicesWithDrift - devicesWithErrors;
+        
+        document.getElementById('devices-sync').textContent = devicesInSync;
+        document.getElementById('drift-detected').textContent = devicesWithDrift;
+        document.getElementById('errors').textContent = devicesWithErrors;
+        
+        // Update recent validations table
+        updateValidationsTable(results);
+        
+    } catch (error) {
+        console.error('Failed to load validation results:', error);
+    }
+}
+
+function updateValidationsTable(results) {
+    const tbody = document.querySelector('#recentValidations tbody');
+    tbody.innerHTML = '';
+    
+    if (results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No validation results available</td></tr>';
+        return;
+    }
+    
+    results.slice(0, 10).forEach(result => {
+        const row = document.createElement('tr');
+        row.className = result.drift_detected ? 'drift-yes' : 'drift-no';
+        
+        const statusClass = result.status === 'success' ? 'status-success' : 'status-error';
+        const driftIcon = result.drift_detected ? 'fas fa-exclamation-triangle text-warning' : 'fas fa-check-circle text-success';
+        
+        row.innerHTML = `
+            <td>${result.device}</td>
+            <td><span class="${statusClass}">${result.status}</span></td>
+            <td><i class="${driftIcon}"></i></td>
+            <td>${result.issues ? result.issues.length : 0}</td>
+            <td>${new Date(result.timestamp).toLocaleString()}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewDeviceDetails('${result.device}')">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+function initializeCharts() {
+    // Validation status over time chart
+    const validationCtx = document.getElementById('validationChart').getContext('2d');
+    validationChart = new Chart(validationCtx, {
+        type: 'line',
+        data: {
+            labels: ['Last 7 days'],
+            datasets: [{
+                label: 'Success',
+                data: [85],
+                borderColor: 'rgb(40, 167, 69)',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                tension: 0.1
+            }, {
+                label: 'Drift Detected',
+                data: [10],
+                borderColor: 'rgb(255, 193, 7)',
+                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                tension: 0.1
+            }, {
+                label: 'Errors',
+                data: [5],
+                borderColor: 'rgb(220, 53, 69)',
+                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Device status distribution chart
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    statusChart = new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['In Sync', 'Drift Detected', 'Errors'],
+            datasets: [{
+                data: [85, 10, 5],
+                backgroundColor: ['#28a745', '#ffc107', '#dc3545'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+async function runValidation(deviceGroup) {
+    try {
+        showAlert(`Starting validation for ${deviceGroup}...`, 'info');
+        
+        const response = await apiCall('/api/validation/run', {
+            method: 'POST',
+            body: JSON.stringify({
+                device_group: deviceGroup,
+                config_type: 'running',
+                dry_run: true
+            })
+        });
+        
+        showAlert(`Validation completed for ${deviceGroup}`, 'success');
+        loadRecentValidations();
+        
+    } catch (error) {
+        console.error('Validation failed:', error);
+        showAlert('Validation failed', 'danger');
+    }
+}
+
+async function generateReport() {
+    try {
+        showAlert('Generating report...', 'info');
+        
+        const response = await apiCall('/api/reports/generate', {
+            method: 'POST',
+            body: JSON.stringify({
+                format: 'html',
+                results: []
+            })
+        });
+        
+        showAlert('Report generated successfully', 'success');
+        
+    } catch (error) {
+        console.error('Report generation failed:', error);
+        showAlert('Report generation failed', 'danger');
+    }
+}
+
+function viewDeviceDetails(deviceName) {
+    // Navigate to device details page or show modal
+    showAlert(`Viewing details for ${deviceName}`, 'info');
+}
+
+function refreshDashboard() {
+    loadDashboardData();
+    showAlert('Dashboard refreshed', 'success');
+}
+</script>
+{% endblock %}
+

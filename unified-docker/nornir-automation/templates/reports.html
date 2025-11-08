@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Nornir Automation{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Reports</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-primary" onclick="generateReport()">
+                <i class="fas fa-plus"></i> Generate Report
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshReports()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Report Generation -->
+<div class="row mb-4">
+    <div class="col-lg-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Generate New Report</h6>
+            </div>
+            <div class="card-body">
+                <form id="reportForm">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="reportFormat">Report Format</label>
+                                <select class="form-control" id="reportFormat" name="format">
+                                    <option value="html">HTML</option>
+                                    <option value="json">JSON</option>
+                                    <option value="csv">CSV</option>
+                                    <option value="xlsx">Excel</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="reportType">Report Type</label>
+                                <select class="form-control" id="reportType" name="type">
+                                    <option value="validation">Validation Results</option>
+                                    <option value="inventory">Device Inventory</option>
+                                    <option value="drift">Configuration Drift</option>
+                                    <option value="compliance">Compliance Check</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="deviceGroup">Device Group</label>
+                                <select class="form-control" id="deviceGroup" name="device_group">
+                                    <option value="all">All Devices</option>
+                                    <option value="routers">Routers</option>
+                                    <option value="switches">Switches</option>
+                                    <option value="firewalls">Firewalls</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="startDate">Start Date</label>
+                                <input type="date" class="form-control" id="startDate" name="start_date">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="endDate">End Date</label>
+                                <input type="date" class="form-control" id="endDate" name="end_date">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Available Reports -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Available Reports</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="reportsTable">
+                        <thead>
+                            <tr>
+                                <th>Report ID</th>
+                                <th>Type</th>
+                                <th>Format</th>
+                                <th>Size</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="loading">
+                                        <i class="fas fa-spinner fa-spin"></i> Loading reports...
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentReports = [];
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    loadReports();
+    setDefaultDates();
+});
+
+function setDefaultDates() {
+    const today = new Date();
+    const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    document.getElementById('endDate').value = today.toISOString().split('T')[0];
+    document.getElementById('startDate').value = lastWeek.toISOString().split('T')[0];
+}
+
+async function loadReports() {
+    try {
+        const response = await apiCall('/api/reports');
+        currentReports = response.reports || [];
+        updateReportsTable(currentReports);
+        
+    } catch (error) {
+        console.error('Failed to load reports:', error);
+        showAlert('Failed to load reports', 'danger');
+    }
+}
+
+function updateReportsTable(reports) {
+    const tbody = document.querySelector('#reportsTable tbody');
+    tbody.innerHTML = '';
+    
+    if (reports.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No reports available</td></tr>';
+        return;
+    }
+    
+    reports.forEach(report => {
+        const row = document.createElement('tr');
+        const sizeKB = Math.round(report.size / 1024);
+        const createdDate = new Date(report.created).toLocaleString();
+        
+        row.innerHTML = `
+            <td>${report.id}</td>
+            <td>${report.type || 'Validation'}</td>
+            <td><span class="badge bg-secondary">${report.format || 'json'}</span></td>
+            <td>${sizeKB} KB</td>
+            <td>${createdDate}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewReport('${report.id}')">
+                    <i class="fas fa-eye"></i> View
+                </button>
+                <button class="btn btn-sm btn-outline-success" onclick="downloadReport('${report.id}')">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteReport('${report.id}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+async function generateReport() {
+    try {
+        const form = document.getElementById('reportForm');
+        const formData = new FormData(form);
+        
+        const data = {
+            format: formData.get('format'),
+            type: formData.get('type'),
+            device_group: formData.get('device_group'),
+            start_date: formData.get('start_date'),
+            end_date: formData.get('end_date')
+        };
+        
+        showAlert('Generating report...', 'info');
+        
+        const response = await apiCall('/api/reports/generate', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        
+        showAlert('Report generated successfully', 'success');
+        loadReports(); // Refresh the reports list
+        
+    } catch (error) {
+        console.error('Report generation failed:', error);
+        showAlert('Report generation failed: ' + error.message, 'danger');
+    }
+}
+
+function viewReport(reportId) {
+    // Open report in new tab or modal
+    const report = currentReports.find(r => r.id === reportId);
+    if (report) {
+        if (report.format === 'html') {
+            window.open(`/api/reports/${reportId}`, '_blank');
+        } else {
+            showAlert(`Viewing ${report.format.toUpperCase()} report: ${reportId}`, 'info');
+        }
+    }
+}
+
+function downloadReport(reportId) {
+    // Trigger download
+    const link = document.createElement('a');
+    link.href = `/api/reports/${reportId}/download`;
+    link.download = `${reportId}.${currentReports.find(r => r.id === reportId)?.format || 'json'}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function deleteReport(reportId) {
+    if (confirm(`Are you sure you want to delete report: ${reportId}?`)) {
+        showAlert(`Deleting report: ${reportId} - Feature coming soon!`, 'info');
+        // Implement report deletion
+    }
+}
+
+function refreshReports() {
+    loadReports();
+    showAlert('Reports refreshed', 'success');
+}
+</script>
+{% endblock %}
+

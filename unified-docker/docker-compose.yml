@@ -178,6 +178,34 @@ services:
       timeout: 5s
       retries: 10
 
+  nornir-automation:
+    build:
+      context: .
+      dockerfile: Dockerfile.nornir
+    depends_on:
+      - netbox
+      - nautobot
+    environment:
+      - NETBOX_URL=http://netbox:8080
+      - NAUTOBOT_URL=http://nautobot:8080
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - FLASK_ENV=development
+    volumes:
+      - ./nornir-automation/inventory:/app/inventory:rw
+      - ./nornir-automation/configs:/app/configs:rw
+      - ./nornir-automation/reports:/app/reports:rw
+      - ./nornir-automation/logs:/app/logs:rw
+    ports:
+      - "8082:8082"
+    networks: [netbox-net, nautobot-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/health"]
+      start_period: 30s
+      timeout: 10s
+      interval: 30s
+      retries: 3
+
 networks:
   netbox-net:
   nautobot-net:

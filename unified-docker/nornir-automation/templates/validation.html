@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration Validation - Nornir Automation{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Configuration Validation</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-primary" onclick="runValidation()">
+                <i class="fas fa-play"></i> Run Validation
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshData()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Validation Configuration -->
+<div class="row mb-4">
+    <div class="col-lg-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Validation Configuration</h6>
+            </div>
+            <div class="card-body">
+                <form id="validationForm">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="deviceGroup">Device Group</label>
+                                <select class="form-control" id="deviceGroup" name="device_group">
+                                    <option value="all">All Devices</option>
+                                    <option value="routers">Routers</option>
+                                    <option value="switches">Switches</option>
+                                    <option value="cisco">Cisco Devices</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="configType">Configuration Type</label>
+                                <select class="form-control" id="configType" name="config_type">
+                                    <option value="running">Running Config</option>
+                                    <option value="startup">Startup Config</option>
+                                    <option value="all">All Configs</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="dryRun">Mode</label>
+                                <select class="form-control" id="dryRun" name="dry_run">
+                                    <option value="true">Dry Run (Read Only)</option>
+                                    <option value="false">Live Validation</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Validation Results -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Validation Results</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="validationResults">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Status</th>
+                                <th>Drift Detected</th>
+                                <th>Issues</th>
+                                <th>Timestamp</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="loading">
+                                        <i class="fas fa-spinner fa-spin"></i> No validation results available
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Device Details Modal -->
+<div class="modal fade" id="deviceDetailsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Device Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="deviceDetailsContent">
+                    <!-- Content will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="saveSourceOfTruth()">Save as Source of Truth</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentValidationResults = [];
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    loadDeviceGroups();
+});
+
+async function loadDeviceGroups() {
+    try {
+        const response = await apiCall('/api/inventory');
+        const inventory = response.inventory;
+        const groups = Object.keys(inventory.groups || {});
+        
+        const select = document.getElementById('deviceGroup');
+        select.innerHTML = '<option value="all">All Devices</option>';
+        
+        groups.forEach(group => {
+            const option = document.createElement('option');
+            option.value = group;
+            option.textContent = group.charAt(0).toUpperCase() + group.slice(1);
+            select.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Failed to load device groups:', error);
+    }
+}
+
+async function runValidation() {
+    try {
+        const form = document.getElementById('validationForm');
+        const formData = new FormData(form);
+        
+        const data = {
+            device_group: formData.get('device_group'),
+            config_type: formData.get('config_type'),
+            dry_run: formData.get('dry_run') === 'true'
+        };
+        
+        showAlert('Starting validation...', 'info');
+        
+        const response = await apiCall('/api/validation/run', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        
+        currentValidationResults = response.results || [];
+        updateValidationResults(currentValidationResults);
+        
+        showAlert(`Validation completed. Found ${currentValidationResults.length} results.`, 'success');
+        
+    } catch (error) {
+        console.error('Validation failed:', error);
+        showAlert('Validation failed: ' + error.message, 'danger');
+    }
+}
+
+function updateValidationResults(results) {
+    const tbody = document.querySelector('#validationResults tbody');
+    tbody.innerHTML = '';
+    
+    if (results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No validation results available</td></tr>';
+        return;
+    }
+    
+    results.forEach(result => {
+        const row = document.createElement('tr');
+        row.className = result.drift_detected ? 'drift-yes' : 'drift-no';
+        
+        const statusClass = result.status === 'success' ? 'status-success' : 'status-error';
+        const driftIcon = result.drift_detected ? 'fas fa-exclamation-triangle text-warning' : 'fas fa-check-circle text-success';
+        const issuesCount = result.issues ? result.issues.length : 0;
+        
+        row.innerHTML = `
+            <td>${result.device}</td>
+            <td><span class="${statusClass}">${result.status}</span></td>
+            <td><i class="${driftIcon}"></i></td>
+            <td>${issuesCount}</td>
+            <td>${new Date(result.timestamp).toLocaleString()}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewDeviceDetails('${result.device}')">
+                    <i class="fas fa-eye"></i> View
+                </button>
+                <button class="btn btn-sm btn-outline-success" onclick="compareConfigs('${result.device}')">
+                    <i class="fas fa-balance-scale"></i> Compare
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+function viewDeviceDetails(deviceName) {
+    const result = currentValidationResults.find(r => r.device === deviceName);
+    if (!result) return;
+    
+    const content = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Device Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Device:</strong></td><td>${result.device}</td></tr>
+                    <tr><td><strong>Status:</strong></td><td><span class="${result.status === 'success' ? 'status-success' : 'status-error'}">${result.status}</span></td></tr>
+                    <tr><td><strong>Drift Detected:</strong></td><td>${result.drift_detected ? 'Yes' : 'No'}</td></tr>
+                    <tr><td><strong>Timestamp:</strong></td><td>${new Date(result.timestamp).toLocaleString()}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Issues Found</h6>
+                ${result.issues && result.issues.length > 0 ? 
+                    '<ul class="list-group">' + result.issues.map(issue => `<li class="list-group-item">${issue}</li>`).join('') + '</ul>' :
+                    '<p class="text-success">No issues found</p>'
+                }
+            </div>
+        </div>
+        ${result.missing_lines ? `
+        <div class="row mt-3">
+            <div class="col-12">
+                <h6>Missing Lines</h6>
+                <pre class="bg-light p-3"><code>${result.missing_lines.join('\n')}</code></pre>
+            </div>
+        </div>
+        ` : ''}
+        ${result.extra_lines ? `
+        <div class="row mt-3">
+            <div class="col-12">
+                <h6>Extra Lines</h6>
+                <pre class="bg-light p-3"><code>${result.extra_lines.join('\n')}</code></pre>
+            </div>
+        </div>
+        ` : ''}
+    `;
+    
+    document.getElementById('deviceDetailsContent').innerHTML = content;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deviceDetailsModal'));
+    modal.show();
+}
+
+function compareConfigs(deviceName) {
+    showAlert(`Configuration comparison for ${deviceName} - Feature coming soon!`, 'info');
+}
+
+function saveSourceOfTruth() {
+    showAlert('Saving as source of truth - Feature coming soon!', 'info');
+}
+
+function refreshData() {
+    if (currentValidationResults.length > 0) {
+        updateValidationResults(currentValidationResults);
+    }
+    showAlert('Data refreshed', 'success');
+}
+</script>
+{% endblock %}
+
